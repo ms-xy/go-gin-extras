@@ -35,19 +35,20 @@ func ResponseWriteError(c *gin.Context, _err interface{}) {
 			string(debug.Stack()), gin.H{"_err": _err})
 	}
 
-	// distinguish between error types
-	switch statusCode := oError.StatusCode(); {
-	case statusCode.Is501NotImplemented():
+	// do not disclose internal errors to the client
+	// detailed error info is only provided for malformed client requests
+	statusCode := oError.StatusCode()
+	if statusCode.Is501NotImplemented() {
 		c.JSON(501, gin.H{"error": `501 Not Implemented`})
-	case statusCode.Is4xxClientError():
-		c.JSON(oError.StatusCode().Int(), gin.H{"error": oError.Error()})
-	default:
+	} else if statusCode.Is4xxClientError() {
+		c.JSON(statusCode.Int(), gin.H{"error": oError.Error()})
+	} else {
 		c.JSON(500, gin.H{"error": `500 Internal Server Error`})
 	}
 
 	// set error so logging handler can attach it
 	c.Set("error", oError)
 
-	// prevent further handlers
+	// prevent subsequent handlers (add logging before recovery!)
 	c.Abort()
 }

@@ -22,8 +22,17 @@ var (
 /*
 Logger creates a gin.HandlerFunc that uses go's standard log package.
 Use log.SetOutput to modify logging output destination.
+Prefix is assembled by strings.Join(prefix, " ").
 */
-func Logger() gin.HandlerFunc {
+func Logger(prefix ...string) gin.HandlerFunc {
+	// define prefix - backwards compatibility by variadic argument
+	var loggingPrefix string
+	if prefix != nil || len(prefix) > 0 {
+		loggingPrefix = strings.Join(prefix, " ")
+	} else {
+		loggingPrefix = "Server"
+	}
+	// define and return handler
 	return func(c *gin.Context) {
 		// get time for handling duration
 		t := time.Now()
@@ -44,10 +53,10 @@ func Logger() gin.HandlerFunc {
 		} else {
 			statusColor = colorElse
 		}
-		formattedStatus := statusColor.Sprintf(" %3d ", status.Int())
+		coloredStatus := statusColor.Sprintf("%3d", status.Int())
 
 		// get request method and format appropriately
-		method := colorMethod.Sprintf(" %6s ", strings.ToUpper(c.Request.Method))
+		coloredMethod := colorMethod.Sprintf("%6s", strings.ToUpper(c.Request.Method))
 
 		// get duration
 		latency := time.Since(t)
@@ -73,12 +82,13 @@ func Logger() gin.HandlerFunc {
 			}
 		}
 
-		log.Printf("[Server] %s |%s| %12s | %21s |%s %s%s\n",
+		log.Printf("[%s] %s [%s] %12s | %21s |%s %s -- %s\n",
+			loggingPrefix,
 			t.Format(time.RFC1123),
-			formattedStatus,
+			coloredStatus,
 			latency.String(),
 			c.Request.RemoteAddr,
-			method,
+			coloredMethod,
 			c.Request.RequestURI,
 			errMsg,
 		)
