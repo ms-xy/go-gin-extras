@@ -12,11 +12,14 @@ import (
 )
 
 var (
-	color2xx    = color.New(color.BgGreen, color.LightWhite)
-	color4xx    = color.New(color.BgYellow, color.LightWhite)
-	color5xx    = color.New(color.BgRed, color.LightWhite)
-	colorElse   = color.New(color.BgWhite, color.Gray)
+	color2xx  = color.New(color.BgGreen, color.LightWhite)
+	color4xx  = color.New(color.BgYellow, color.LightWhite)
+	color5xx  = color.New(color.BgRed, color.LightWhite)
+	colorElse = color.New(color.BgWhite, color.Gray)
+
+	colorPrefix = color.New(color.Green)
 	colorMethod = color.New(color.BgBlue, color.LightWhite)
+	colorPath   = color.New(color.BgLightMagenta, color.Blue.Darken())
 )
 
 /*
@@ -25,6 +28,7 @@ Use log.SetOutput to modify logging output destination.
 Prefix is assembled by strings.Join(prefix, " ").
 */
 func Logger(prefix ...string) gin.HandlerFunc {
+
 	// define prefix - backwards compatibility by variadic argument
 	var loggingPrefix string
 	if prefix != nil || len(prefix) > 0 {
@@ -32,6 +36,8 @@ func Logger(prefix ...string) gin.HandlerFunc {
 	} else {
 		loggingPrefix = "Server"
 	}
+	loggingPrefix = colorPrefix.Sprint(loggingPrefix)
+
 	// define and return handler
 	return func(c *gin.Context) {
 		// get time for handling duration
@@ -39,6 +45,9 @@ func Logger(prefix ...string) gin.HandlerFunc {
 
 		// handle request / other middleware
 		c.Next()
+
+		// get duration
+		latency := time.Since(t)
 
 		// access the status we are sending
 		// color code it appropriately
@@ -53,13 +62,6 @@ func Logger(prefix ...string) gin.HandlerFunc {
 		} else {
 			statusColor = colorElse
 		}
-		coloredStatus := statusColor.Sprintf("%3d", status.Int())
-
-		// get request method and format appropriately
-		coloredMethod := colorMethod.Sprintf("%6s", strings.ToUpper(c.Request.Method))
-
-		// get duration
-		latency := time.Since(t)
 
 		// optional error, formatted (must start with a new line)
 		errMsg := ""
@@ -81,15 +83,15 @@ func Logger(prefix ...string) gin.HandlerFunc {
 				errMsg = fmt.Sprintf("\nError: %s", err)
 			}
 		}
-
-		log.Printf("[%s] %s [%s] %12s | %21s |%s %s -- %s\n",
+		// [pre] status | millis | client-addr | method+path(+[opt]\n error-msg)
+		log.Printf("[%s] %s | %s | %s | %s%s%s\n",
 			loggingPrefix,
-			t.Format(time.RFC1123),
-			coloredStatus,
-			latency.String(),
+			// t.Format(time.RFC1123),
+			statusColor.Sprintf("%d", status.Int()),
+			latency.Round(time.Millisecond).String(),
 			c.Request.RemoteAddr,
-			coloredMethod,
-			c.Request.RequestURI,
+			colorMethod.Sprintf("%s", strings.ToUpper(c.Request.Method)),
+			colorPath.Sprint(" "+c.Request.RequestURI),
 			errMsg,
 		)
 	}
