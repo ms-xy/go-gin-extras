@@ -1,8 +1,19 @@
 package session
 
 import (
+	"errors"
+
 	"github.com/google/uuid"
 	"go.etcd.io/bbolt"
+	color "gopkg.in/gookit/color.v1"
+)
+
+var (
+	colorWarning = color.New(color.Yellow)
+
+	ERR_SID_NOT_FOUND = errors.New("session ID not found in session cache")
+
+	_bucket_sessions_ = []byte("sessions")
 )
 
 type SessionCache struct {
@@ -10,53 +21,60 @@ type SessionCache struct {
 	db   *bbolt.DB
 }
 
-const (
-	BUCKET_SESSIONS = "sessions"
-)
-
-func NewSessionCache(path string) *SessionCache {
+func NewSessionCache(path string) (*SessionCache, error) {
 	if db, err := bbolt.Open(path, 0666, nil); err != nil {
-		panic(err)
+		return nil, err
 	} else {
-		return &SessionCache{
+		cache := &SessionCache{
 			path: path,
 			db:   db,
 		}
+		err := db.Update(func(tx *bbolt.Tx) error {
+			_, err := tx.CreateBucketIfNotExists(_bucket_sessions_)
+			return err
+		})
+		return cache, err
 	}
 }
 
-func (this *SessionCache) Exists(id uuid.UUID) (exists bool) {
-	exists = false
-	this.db.View(func(tx *bbolt.Tx) error {
-		if sessions := tx.Bucket([]byte(BUCKET_SESSIONS)); sessions != nil {
-			exists = sessions.Bucket(id[:]) != nil
+func (this *SessionCache) New(session *Session) error {
+	err := this.db.Update(func(tx *bbolt.Tx) error {
+		sid := uuid.Must(uuid.NewRandom())
+		_, err := tx.Bucket(_bucket_sessions_).CreateBucket(sid[:])
+		if err == nil {
+			session.SetID(sid)
 		}
-		return nil
+		return err
+		// todo sync session variables to bucket
 	})
-	return
+	return err
 }
 
-func (this *SessionCache) StartSession() uuid.UUID {
-	for {
-		if sessionID, err := uuid.NewRandom(); err == nil {
-			if err := this.SessionPersist(sessionID); err == nil {
-				return sessionID
-			} else {
-				// already exists -> new attempt
-			}
-		} else {
-			panic(err)
+func (this *SessionCache) Continue(session *Session) error {
+	err := this.db.View(func(tx *bbolt.Tx) error {
+		sid := session.GetID()
+		bucket := tx.Bucket(_bucket_sessions_).Bucket(sid[:])
+		if bucket == nil {
+			session.SetID(uuid.Nil)
+			return ERR_SID_NOT_FOUND
 		}
-	}
-}
-
-func (this *SessionCache) SessionPersist(id uuid.UUID) error {
-	return this.db.Update(func(tx *bbolt.Tx) error {
-		if sessions, err := tx.CreateBucketIfNotExists([]byte(BUCKET_SESSIONS)); err != nil {
-			if _, err := sessions.CreateBucket(id[:]); err != nil {
-				return err
-			}
-		}
+		// todo sync bucket variables to session
 		return nil
 	})
+	return err
+}
+
+func (this *SessionCache) Delete(session *Session) error {
+	err := this.db.Update(func(tx *bbolt.Tx) error {
+		sid := session.GetID()
+		session.SetID(uuid.Nil)
+		allBuckets := tx.Bucket(_bucket_sessions_)
+		bucket := allBuckets.Bucket(sid[:])
+		if bucket == nil {
+			return ERR_SID_NOT_FOUND
+		}
+		err := allBuckets.DeleteBucket(sid[:])
+		return err
+	})
+	return err
 }
