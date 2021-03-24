@@ -16,7 +16,8 @@ func main() {
 	log.SetOutput(io.MultiWriter(os.Stdout))
 	engine.Use(common.Logger())
 	engine.Use(common.Recovery())
-	engine.Use(session.DefaultSessionMiddleware())
+	_, sessionMiddleware := session.DefaultSessionMiddleware()
+	engine.Use(sessionMiddleware)
 	engine.GET("/", func(c *gin.Context) {
 		s := session.GetSession(c)
 		c.String(200, s.Token())

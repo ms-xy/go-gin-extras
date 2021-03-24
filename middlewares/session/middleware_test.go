@@ -55,7 +55,8 @@ func TestMiddleware(t *testing.T) {
 	r := gin.New()
 	HandlePanic = true
 	store := NewTestStore()
-	r.Use(SessionMiddleware(store))
+	_, handler := SessionMiddleware(store)
+	r.Use(handler)
 
 	r.GET("/", func(c *gin.Context) {
 		s := GetSession(c)

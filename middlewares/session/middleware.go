@@ -24,7 +24,10 @@ var (
 	HandlePanic = false
 )
 
-func DefaultSessionMiddleware() gin.HandlerFunc {
+// DefaultSessionMiddleware is a convenience wrapper around
+// SessionMiddleware that creates a mysqlstore based on the environment
+// variable MYSQL_DATASOURCE
+func DefaultSessionMiddleware() (*scs.Manager, gin.HandlerFunc) {
 	db, err := sql.Open("mysql", MySqlDataSource)
 	if err != nil {
 		panic(err)
@@ -33,7 +36,12 @@ func DefaultSessionMiddleware() gin.HandlerFunc {
 	return SessionMiddleware(store)
 }
 
-func SessionMiddleware(store scs.Store) gin.HandlerFunc {
+// SessionMiddleware creates a session middleware wrapper using scs.Manager
+// with the provided scs.Store as the backing session storage.
+// The return values include the manager, useful for further customization and
+// the produced handler function for inclusion in your handler chain via
+// gin.Use(handler)
+func SessionMiddleware(store scs.Store) (*scs.Manager, gin.HandlerFunc) {
 	sm := scs.NewManager(store)
 	lifetime := time.Duration(SessionMaxAge) * time.Second
 	if lifetime > 0 {
@@ -50,7 +58,7 @@ func SessionMiddleware(store scs.Store) gin.HandlerFunc {
 	sm.Domain(SessionDomain)
 	sm.Persist(true)
 
-	return func(c *gin.Context) {
+	return sm, func(c *gin.Context) {
 		// only if HandlePanic is set, register recovery function
 		if HandlePanic {
 			start := time.Now()
@@ -85,6 +93,8 @@ func SessionMiddleware(store scs.Store) gin.HandlerFunc {
 	}
 }
 
+// GetSession returns the session object associated with the current request
+// context.
 func GetSession(c *gin.Context) *scs.Session {
 	return c.MustGet(ContextKey).(*scs.Session)
 }
