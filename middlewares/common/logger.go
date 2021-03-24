@@ -1,7 +1,7 @@
 package common
 
 import (
-	"go-gin-extras/errors"
+	"github.com/ms-xy/go-gin-extras/errors"
 
 	"fmt"
 	"log"

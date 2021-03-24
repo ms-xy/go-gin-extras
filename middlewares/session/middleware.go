@@ -1,7 +1,7 @@
 package session
 
 import (
-	"go-gin-extras/middlewares/common"
+	"github.com/ms-xy/go-gin-extras/middlewares/common"
 	"time"
 
 	"github.com/gin-contrib/sessions"
