@@ -1,13 +1,14 @@
 package common
 
 import (
+	"go-gin-extras/errors"
+
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ms-xy/go-gin-extras/errors"
 	color "gopkg.in/gookit/color.v1"
 )
 
@@ -40,59 +41,56 @@ func Logger(prefix ...string) gin.HandlerFunc {
 
 	// define and return handler
 	return func(c *gin.Context) {
-		// get time for handling duration
-		t := time.Now()
-
-		// handle request / other middleware
+		start := time.Now()
 		c.Next()
-
-		// get duration
-		latency := time.Since(t)
-
-		// access the status we are sending
-		// color code it appropriately
-		status := errors.StatusCode(c.Writer.Status())
-		var statusColor color.Style
-		if status.Is2xxSuccess() {
-			statusColor = color2xx
-		} else if status.Is4xxClientError() {
-			statusColor = color4xx
-		} else if status.Is5xxServerError() {
-			statusColor = color5xx
-		} else {
-			statusColor = colorElse
-		}
-
-		// optional error, formatted (must start with a new line)
-		errMsg := ""
-		if err, exists := c.Get("error"); exists {
-			if oErr, ok := err.(errors.Error); ok {
-				if msg := oErr.Error(); msg != "" {
-					errMsg = "\nPanic: " + msg
-				}
-				if data := oErr.Data(); data != nil {
-					errMsg += fmt.Sprintf("\nAttached Data: %s", data)
-				}
-				if stackTrace := oErr.StackTrace(); stackTrace != "" {
-					errMsg += "\nStack Trace:\n" + stackTrace
-				}
-				if errMsg != "" {
-					errMsg = color.Red.Sprint(errMsg)
-				}
-			} else {
-				errMsg = fmt.Sprintf("\nError: %s", err)
-			}
-		}
-		// [pre] status | millis | client-addr | method+path(+[opt]\n error-msg)
-		log.Printf("[%s] %s | %s | %s | %s%s%s\n",
-			loggingPrefix,
-			// t.Format(time.RFC1123),
-			statusColor.Sprintf("%d", status.Int()),
-			latency.Round(time.Millisecond).String(),
-			c.Request.RemoteAddr,
-			colorMethod.Sprintf("%s", strings.ToUpper(c.Request.Method)),
-			colorPath.Sprint(" "+c.Request.RequestURI),
-			errMsg,
-		)
+		WriteLogEntry(c, loggingPrefix, time.Since(start))
 	}
+}
+
+func WriteLogEntry(c *gin.Context, prefix string, d time.Duration) {
+	// access the status we are sending
+	// color code it appropriately
+	status := errors.StatusCode(c.Writer.Status())
+	var statusColor color.Style
+	if status.Is2xxSuccess() {
+		statusColor = color2xx
+	} else if status.Is4xxClientError() {
+		statusColor = color4xx
+	} else if status.Is5xxServerError() {
+		statusColor = color5xx
+	} else {
+		statusColor = colorElse
+	}
+
+	// optional error, formatted (must start with a new line)
+	errMsg := ""
+	if err, exists := c.Get("error"); exists {
+		if oErr, ok := err.(errors.Error); ok {
+			if msg := oErr.Error(); msg != "" {
+				errMsg = "\nPanic: " + msg
+			}
+			if data := oErr.Data(); data != nil {
+				errMsg += fmt.Sprintf("\nAttached Data: %s", data)
+			}
+			if stackTrace := oErr.StackTrace(); stackTrace != "" {
+				errMsg += "\nStack Trace:\n" + stackTrace
+			}
+			if errMsg != "" {
+				errMsg = color.Red.Sprint(errMsg)
+			}
+		} else {
+			errMsg = fmt.Sprintf("\nError: %s", err)
+		}
+	}
+	// [pre] status | millis | client-addr | method+path(+[opt]\n error-msg)
+	log.Printf("[%s] %s | %s | %s | %s%s%s\n",
+		prefix,
+		// t.Format(time.RFC1123),
+		statusColor.Sprintf("%d", status.Int()),
+		d.Round(time.Millisecond).String(),
+		c.Request.RemoteAddr,
+		colorMethod.Sprintf("%s", strings.ToUpper(c.Request.Method)),
+		colorPath.Sprint(" "+c.Request.RequestURI),
+		errMsg,
+	)
 }

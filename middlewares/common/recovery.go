@@ -1,11 +1,12 @@
 package common
 
 import (
+	"go-gin-extras/errors"
+	"go-gin-extras/stack"
+
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ms-xy/go-gin-extras/errors"
-	"github.com/ms-xy/go-gin-extras/stack"
 )
 
 func Recovery() gin.HandlerFunc {
