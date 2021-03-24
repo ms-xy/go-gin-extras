@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	MySqlDataSource string = env.GetOrDefault("MYSQL_DATASOURCE", "test-user:test-password@localhost")
+	MySqlDataSource string = env.GetOrDefault("MYSQL_DATASOURCE", "test-user:test-password@tcp(localhost)/go_om")
 
 	SessionCookie   string = env.GetOrDefault("SESSION_COOKIE", "session_id")
 	SessionDomain   string = env.GetOrDefault("SESSION_DOMAIN", "127.0.0.1")

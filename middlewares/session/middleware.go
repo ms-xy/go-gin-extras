@@ -64,6 +64,5 @@ func SessionMiddleware() gin.HandlerFunc {
 func GetSession(c *gin.Context) *scs.Session {
 	sm := c.MustGet(ContextKey).(*scs.Manager)
 	s := sm.LoadFromContext(c)
-	panic(s)
-	// return s
+	return s
 }
