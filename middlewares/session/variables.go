@@ -12,11 +12,12 @@ import (
 var (
 	MySqlDataSource string = env.GetOrDefault("MYSQL_DATASOURCE", "test-user:test-password@tcp(localhost)/go_om")
 
-	SessionCookie   string = env.GetOrDefault("SESSION_COOKIE", "session_id")
-	SessionDomain   string = env.GetOrDefault("SESSION_DOMAIN", "127.0.0.1")
-	SessionMaxAge   int    = mustParseInt(env.GetOrDefault("SESSION_MAX_AGE", "0"))
-	SessionSecure   bool   = strings.ToLower(os.Getenv("SESSION_SECURE")) == "true"
-	SessionHttpOnly bool   = (strings.ToLower(env.GetOrDefault("SESSION_HTTP_ONLY", "true")) == "true")
+	SessionCookie      string = env.GetOrDefault("SESSION_COOKIE", "session_id")
+	SessionDomain      string = env.GetOrDefault("SESSION_DOMAIN", "127.0.0.1")
+	SessionMaxAge      int    = mustParseInt(env.GetOrDefault("SESSION_MAX_AGE", "86400"))     // seconds, 24 hour default
+	SessionIdleTimeout int    = mustParseInt(env.GetOrDefault("SESSION_IDLE_TIMEOUT", "1800")) // seconds, 30 mins default
+	SessionSecure      bool   = strings.ToLower(os.Getenv("SESSION_SECURE")) == "true"
+	SessionHttpOnly    bool   = (strings.ToLower(env.GetOrDefault("SESSION_HTTP_ONLY", "true")) == "true")
 
 	SessionSecret []byte = mustDecodeHex(env.GetOrDefault("SESSION_COOKIE_SECRET", "688b9fdb0a43bf50c93efe6c06890a0ba9462c4662390b3a078901ff01841b23"))
 	SessionAesKey []byte = mustDecodeHex(env.GetOrDefault("SESSION_COOKIE_AES_KEY", "a6a07fbdf38d88fc92f794d570fd4b4d8c7b712e734e1adbba4690b981e28d5b"))

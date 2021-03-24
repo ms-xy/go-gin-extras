@@ -24,21 +24,34 @@ var (
 	HandlePanic = false
 )
 
-func SessionMiddleware() gin.HandlerFunc {
+func DefaultSessionMiddleware() gin.HandlerFunc {
 	db, err := sql.Open("mysql", MySqlDataSource)
 	if err != nil {
 		panic(err)
 	}
 	store := mysqlstore.New(db, 10*time.Minute)
+	return SessionMiddleware(store)
+}
+
+func SessionMiddleware(store scs.Store) gin.HandlerFunc {
 	sm := scs.NewManager(store)
-	sm.Lifetime(time.Duration(SessionMaxAge) * time.Second)
-	sm.IdleTimeout(30 * time.Minute)
+	lifetime := time.Duration(SessionMaxAge) * time.Second
+	if lifetime > 0 {
+		sm.Lifetime(lifetime)
+	}
+	idletime := time.Duration(SessionIdleTimeout) * time.Second
+	if idletime <= 0 {
+		idletime = 30 * time.Minute
+	}
+	sm.IdleTimeout(idletime)
 	sm.Name(SessionCookie)
 	sm.HttpOnly(SessionHttpOnly)
 	sm.Secure(SessionSecure)
 	sm.Domain(SessionDomain)
 	sm.Persist(true)
+
 	return func(c *gin.Context) {
+		// only if HandlePanic is set, register recovery function
 		if HandlePanic {
 			start := time.Now()
 			defer func() {
@@ -48,21 +61,30 @@ func SessionMiddleware() gin.HandlerFunc {
 				}
 			}()
 		}
-		c.Set(ContextKey, sm)
-		session := sm.Load(c.Request)
+
+		// gin does not set request context on its own, ensure it's set
+		r := c.Request.WithContext(c)
+
+		// manager.Load calls load, which in turn checks if session exists
+		// and initializes a new one if not
+		session := sm.Load(r)
+
+		// new sessions are not persisted yet, touch should take care of that
 		err := session.Touch(c.Writer)
 		if err != nil {
 			panic(err)
 		}
-		ctx := sm.AddToContext(c.Request.Context(), session)
-		r := c.Request.WithContext(ctx)
-		c.Request = r
-		c.Next()
+
+		// save session to context
+		c.Set(ContextKey, session)
+
+		// if handle panic is true, must call c.Next() for the handler to catch
+		if HandlePanic {
+			c.Next()
+		}
 	}
 }
 
 func GetSession(c *gin.Context) *scs.Session {
-	sm := c.MustGet(ContextKey).(*scs.Manager)
-	s := sm.LoadFromContext(c)
-	return s
+	return c.MustGet(ContextKey).(*scs.Session)
 }
