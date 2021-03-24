@@ -1,17 +1,19 @@
 package session
 
 import (
-	"github.com/ms-xy/go-gin-extras/middlewares/common"
+	"database/sql"
 	"time"
 
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
+	"github.com/ms-xy/go-gin-extras/middlewares/common"
+
+	"github.com/alexedwards/scs"
+	"github.com/alexedwards/scs/stores/mysqlstore"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 const (
-	ContextKey = "github.com/ms-xy/go-gin-extras/middlewares/session"
+	ContextKey = "github.com/ms-xy/go-gin-extras/middlewares/session-manager"
 )
 
 var (
@@ -22,56 +24,46 @@ var (
 	HandlePanic = false
 )
 
-func GetSessionMiddleware() []gin.HandlerFunc {
-	return []gin.HandlerFunc{
-		getGorillaSessionMiddleware(),
-		getSessionMiddleware(CachePath),
-	}
-}
-
-func getGorillaSessionMiddleware() gin.HandlerFunc {
-	store := cookie.NewStore(SessionSecret, SessionAesKey)
-	store.Options(sessions.Options{
-		Domain:   SessionDomain,
-		MaxAge:   SessionMaxAge,
-		HttpOnly: SessionHttpOnly,
-		Secure:   SessionSecure,
-	})
-	return sessions.Sessions("session", store)
-}
-
-func getSessionMiddleware(cachePath string) gin.HandlerFunc {
-	cache, err := NewSessionCache(cachePath)
+func SessionMiddleware() gin.HandlerFunc {
+	db, err := sql.Open("mysql", MySqlDataSource)
 	if err != nil {
-		panic(err) // should be handed up (?)
+		panic(err)
 	}
+	store := mysqlstore.New(db, 10*time.Minute)
+	sm := scs.NewManager(store)
+	sm.Lifetime(time.Duration(SessionMaxAge) * time.Second)
+	sm.IdleTimeout(30 * time.Minute)
+	sm.Name(SessionCookie)
+	sm.HttpOnly(SessionHttpOnly)
+	sm.Secure(SessionSecure)
+	sm.Domain(SessionDomain)
+	sm.Persist(true)
 	return func(c *gin.Context) {
 		if HandlePanic {
+			start := time.Now()
 			defer func() {
-				start := time.Now()
 				if r := recover(); r != nil {
 					common.ResponseWriteError(c, r)
 					common.WriteLogEntry(c, "SessionMiddleware", time.Since(start))
 				}
 			}()
 		}
-		s := NewSession(cache)
-		s_sid := s.session.Get(SESSION_ID)
-		if s_sid != nil {
-			if s_id, ok := s_sid.(string); ok {
-				s.SetID(uuid.MustParse(s_id))
-			}
-		}
-		if err := s.Start(); err != nil {
+		c.Set(ContextKey, sm)
+		session := sm.Load(c.Request)
+		err := session.Touch(c.Writer)
+		if err != nil {
 			panic(err)
 		}
-		gsession := sessions.Default(c)
-		gsession.Set(SESSION_ID, s.GetID().String())
-		c.Set(ContextKey, s)
-		gsession.Save()
+		ctx := sm.AddToContext(c.Request.Context(), session)
+		r := c.Request.WithContext(ctx)
+		c.Request = r
+		c.Next()
 	}
 }
 
-func GetSession(c *gin.Context) *Session {
-	return c.MustGet(ContextKey).(*Session)
+func GetSession(c *gin.Context) *scs.Session {
+	sm := c.MustGet(ContextKey).(*scs.Manager)
+	s := sm.LoadFromContext(c)
+	panic(s)
+	// return s
 }
