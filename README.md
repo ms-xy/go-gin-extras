@@ -91,4 +91,9 @@ func main() {
     SessionHttpOnly bool = (strings.ToLower(env.GetOrDefault("SESSION_HTTP_ONLY", "true")) == "true")
   ```
 
+-----
+#### License
+-----
 
+This project is licensed under the MIT license.
+Please refer to the provided license file in the project root for details
