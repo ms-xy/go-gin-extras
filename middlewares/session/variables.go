@@ -9,10 +9,6 @@ import (
 	env "github.com/ms-xy/go-common/environment"
 )
 
-const (
-	SESSION_ID = "session_id"
-)
-
 var (
 	// CachePath = path for bbolt key-val store
 	// SessionDomain = domain for session cookies
