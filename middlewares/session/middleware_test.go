@@ -60,8 +60,6 @@ func TestMiddleware(t *testing.T) {
 
 	r.GET("/", func(c *gin.Context) {
 		s := GetSession(c)
-		log.Printf("Token: %s\n", s.Token())
-		store.PrintDump()
 		c.JSON(200, s)
 	})
 
@@ -73,14 +71,12 @@ func TestMiddleware(t *testing.T) {
 
 	var sid *http.Cookie
 	for _, cookie := range w.Result().Cookies() {
-		if cookie.Name == "session_id" {
+		if cookie.Name == SessionCookie {
 			sid = cookie
 		}
 	}
 	require.NotNil(t, sid)
 	require.NotEmpty(t, sid.Value)
-
-	log.Println("----------------")
 
 	// running a request with session_id should retain the session_id
 	w = httptest.NewRecorder()
@@ -91,7 +87,7 @@ func TestMiddleware(t *testing.T) {
 
 	var sid2 *http.Cookie
 	for _, cookie := range w.Result().Cookies() {
-		if cookie.Name == "session_id" {
+		if cookie.Name == SessionCookie {
 			sid2 = cookie
 		}
 	}

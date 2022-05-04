@@ -10,6 +10,9 @@ import (
 )
 
 var (
+	// ContextKey defines the key within the session where the middleware stores its data
+	ContextKey = "session-manager"
+
 	// MySqlDataSource is the parameter used for creation of the store when calling DefaultSessionMiddleware().
 	// See mysqlstore in scs for info on the required table schema.
 	MySqlDataSource string = env.GetOrDefault("MYSQL_DATASOURCE", "test-user:test-password@tcp(localhost)/go_om")

@@ -12,10 +12,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-const (
-	ContextKey = "github.com/ms-xy/go-gin-extras/middlewares/session-manager"
-)
-
 var (
 	// HandlePanic indicates whether or not the session middleware will handle
 	// its own panics or not. Default is false. Setting it to true will result
@@ -30,6 +26,9 @@ var (
 func DefaultSessionMiddleware() (*scs.Manager, gin.HandlerFunc) {
 	db, err := sql.Open("mysql", MySqlDataSource)
 	if err != nil {
+		panic(err)
+	}
+	if err := db.Ping(); err != nil {
 		panic(err)
 	}
 	store := mysqlstore.New(db, 10*time.Minute)
