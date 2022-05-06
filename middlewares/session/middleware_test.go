@@ -47,19 +47,23 @@ func (ts *TestStore) PrintDump() {
 	}
 }
 
+func (ts *TestStore) Commit(token string, b []byte, expiry time.Time) (err error) {
+	return nil
+}
+
 func NewTestStore() *TestStore {
 	return &TestStore{sessions: make(map[string]Entry)}
 }
 
 func TestMiddleware(t *testing.T) {
 	r := gin.New()
-	HandlePanic = true
+	mgr, handler, getter := SessionMiddleware("session", true)
 	store := NewTestStore()
-	_, handler := SessionMiddleware(store)
+	mgr.Store = store
 	r.Use(handler)
 
 	r.GET("/", func(c *gin.Context) {
-		s := GetSession(c)
+		s := getter(c)
 		c.JSON(200, s)
 	})
 
@@ -71,7 +75,7 @@ func TestMiddleware(t *testing.T) {
 
 	var sid *http.Cookie
 	for _, cookie := range w.Result().Cookies() {
-		if cookie.Name == SessionCookie {
+		if cookie.Name == "session" {
 			sid = cookie
 		}
 	}
@@ -87,7 +91,7 @@ func TestMiddleware(t *testing.T) {
 
 	var sid2 *http.Cookie
 	for _, cookie := range w.Result().Cookies() {
-		if cookie.Name == SessionCookie {
+		if cookie.Name == "session" {
 			sid2 = cookie
 		}
 	}

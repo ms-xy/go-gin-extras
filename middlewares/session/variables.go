@@ -2,37 +2,85 @@ package session
 
 import (
 	"encoding/hex"
-	"os"
 	"strconv"
-	"strings"
 
-	env "github.com/ms-xy/go-common/environment"
+	cfg "github.com/ms-xy/go-common/configuration"
 )
 
-var (
+type SessionConfig struct {
 	// ContextKey defines the key within the session where the middleware stores its data
-	ContextKey = "session-manager"
+	ContextKey string
+	// HandlePanic indicates whether or not the session middleware will handle
+	// its own panics or not. Default is false. Setting it to true will result
+	// in the same behavior as using gin.Use(Logging(), Recovery()) from this
+	// repository.
+	HandlePanic bool
 
 	// MySqlDataSource is the parameter used for creation of the store when calling DefaultSessionMiddleware().
 	// See mysqlstore in scs for info on the required table schema.
-	MySqlDataSource string = env.GetOrDefault("MYSQL_DATASOURCE", "test-user:test-password@tcp(localhost)/go_om")
+	MySqlDataSource string
+	MySqlTableName  string
 
-	// SessionCookie is the name of the session cookie used, defaults to 'session'
-	SessionCookie string = env.GetOrDefault("SESSION_COOKIE", "session")
+	// CookieName is the name of the session cookie used, defaults to 'session'
+	CookieName string
+	// CookieDomain is the name of the domain associated with the session cookie
+	CookieDomain string
 	// SessionDomain is the name of the domain associated with the session cookie
-	SessionDomain string = env.GetOrDefault("SESSION_DOMAIN", "127.0.0.1")
-	// SessionMaxAge is the maximum session lifetime in seconds
-	SessionMaxAge int = mustParseInt(env.GetOrDefault("SESSION_MAX_AGE", "86400")) // seconds, 24 hour default
-	// SessionIdleTimeout is the maximum idle time before a non-active session is discarded
-	SessionIdleTimeout int = mustParseInt(env.GetOrDefault("SESSION_IDLE_TIMEOUT", "1800")) // seconds, 30 mins default
-	// SessionSecure sets wether or not the cookie should be https only
-	SessionSecure bool = strings.ToLower(os.Getenv("SESSION_SECURE")) == "true"
-	// SessionHttpOnly sets wether the cookie be accessible via javascript
-	SessionHttpOnly bool = (strings.ToLower(env.GetOrDefault("SESSION_HTTP_ONLY", "true")) == "true")
+	CookiePath string
+	// {true,false}: Is the cookie HTTPS only? [default=false]
+	CookieSecure bool
+	// {true,false}: Shall the cookie be restricted to http or is it also accessible via Javascript? [default=true]
+	CookieHttpOnly bool
+	// {true,false}: Should the cookie persist across browser sessions? [default=true]
+	CookiePersist bool
+
+	// SessionLifetime is the maximum session lifetime in seconds
+	SessionLifetime int
+	// SessionIdletime is the maximum idle time before a non-active session is discarded
+	SessionIdletime int
 
 	// SessionSecret []byte = mustDecodeHex(env.GetOrDefault("SESSION_COOKIE_SECRET", "688b9fdb0a43bf50c93efe6c06890a0ba9462c4662390b3a078901ff01841b23"))
 	// SessionAesKey []byte = mustDecodeHex(env.GetOrDefault("SESSION_COOKIE_AES_KEY", "a6a07fbdf38d88fc92f794d570fd4b4d8c7b712e734e1adbba4690b981e28d5b"))
+}
+
+var (
+	Config SessionConfig = SessionConfig{}
 )
+
+func init() {
+	loader, err := cfg.LoadConfiguration(
+		func() (cfg.ConfigurationLoader, error) { return cfg.LoadEnvConfiguration() },
+		func() (cfg.ConfigurationLoader, error) {
+			loader, _ := cfg.LoadYamlConfiguration("session-manager-settings.yaml")
+			return loader, nil
+		},
+		func() (cfg.ConfigurationLoader, error) {
+			loader, _ := cfg.LoadJsonConfiguration("session-manager-settings.json")
+			return loader, nil
+		},
+	)
+	if err != nil {
+		panic(err)
+	}
+	loader.GetTypeSafeOrDefault("session.middleware.handlepanic", &Config.HandlePanic, false)
+
+	loader.GetTypeSafeOrDefault("session.mysql.dsn", &Config.MySqlDataSource, "test-user:test-password@tcp(localhost)/go_om")
+	loader.GetTypeSafeOrDefault("session.mysql.table", &Config.CookiePath, "sessions")
+
+	loader.GetTypeSafeOrDefault("session.cookie.name", &Config.CookieName, "session")
+	loader.GetTypeSafeOrDefault("session.cookie.domain", &Config.CookieDomain, "127.0.0.1")
+	loader.GetTypeSafeOrDefault("session.cookie.path", &Config.CookiePath, "")
+	loader.GetTypeSafeOrDefault("session.cookie.secure", &Config.CookieSecure, false)
+	loader.GetTypeSafeOrDefault("session.cookie.httpOnly", &Config.CookieHttpOnly, true)
+	loader.GetTypeSafeOrDefault("session.cookie.persist", &Config.CookiePersist, true)
+
+	loader.GetTypeSafeOrDefault("session.maxAge", &Config.SessionLifetime, 86400)
+	loader.GetTypeSafeOrDefault("session.idleTime", &Config.SessionIdletime, 1800)
+	loader.GetTypeSafeOrDefault("session.contextKey", &Config.ContextKey, "session")
+
+	// SessionSecret []byte = mustDecodeHex(env.GetOrDefault("SESSION_COOKIE_SECRET", "688b9fdb0a43bf50c93efe6c06890a0ba9462c4662390b3a078901ff01841b23"))
+	// SessionAesKey []byte = mustDecodeHex(env.GetOrDefault("SESSION_COOKIE_AES_KEY", "a6a07fbdf38d88fc92f794d570fd4b4d8c7b712e734e1adbba4690b981e28d5b"))
+}
 
 func mustParseInt(s string) int {
 	v, err := strconv.ParseInt(s, 10, 32)
