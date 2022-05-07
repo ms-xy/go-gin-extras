@@ -2,13 +2,15 @@ package session
 
 import (
 	// "encoding/json"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/ms-xy/go-common/log"
+	"github.com/ms-xy/go-gin-extras/middlewares/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,23 +34,19 @@ func (ts *TestStore) Find(token string) ([]byte, bool, error) {
 			return session.data, true, nil
 		}
 	}
-	log.Printf("== %s invalid\n", token)
+	log.Debugf("token '%s' invalid", token)
 	return nil, false, nil
 }
 
-func (ts *TestStore) Save(token string, b []byte, expiry time.Time) (err error) {
+func (ts *TestStore) Commit(token string, b []byte, expiry time.Time) (err error) {
 	ts.sessions[token] = Entry{b, expiry}
 	return nil
 }
 
 func (ts *TestStore) PrintDump() {
 	for token, entry := range ts.sessions {
-		log.Printf("\t%s=%s\n", token, entry.data)
+		log.Debug("\t%s=%s\n", token, entry.data)
 	}
-}
-
-func (ts *TestStore) Commit(token string, b []byte, expiry time.Time) (err error) {
-	return nil
 }
 
 func NewTestStore() *TestStore {
@@ -56,14 +54,17 @@ func NewTestStore() *TestStore {
 }
 
 func TestMiddleware(t *testing.T) {
+	log.SetLevel(log.LevelDebug)
 	r := gin.New()
-	mgr, handler, getter := SessionMiddleware("session", true)
+	mgr := scs.New()
+	handler := SessionMiddleware(mgr, true)
 	store := NewTestStore()
 	mgr.Store = store
+	r.Use(common.Logger())
 	r.Use(handler)
 
 	r.GET("/", func(c *gin.Context) {
-		s := getter(c)
+		s := From(c)
 		c.JSON(200, s)
 	})
 
@@ -73,27 +74,16 @@ func TestMiddleware(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, 200, w.Code)
 
-	var sid *http.Cookie
-	for _, cookie := range w.Result().Cookies() {
-		if cookie.Name == "session" {
-			sid = cookie
-		}
-	}
-	require.NotNil(t, sid)
-	require.NotEmpty(t, sid.Value)
+	sid := w.Result().Header.Get(HEADER_XSESSION)
+	require.NotEmpty(t, sid)
 
 	// running a request with session_id should retain the session_id
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("GET", "/", nil)
-	req.AddCookie(sid)
+	req.Header.Set(HEADER_XSESSION, sid)
 	r.ServeHTTP(w, req)
 	require.Equal(t, 200, w.Code)
 
-	var sid2 *http.Cookie
-	for _, cookie := range w.Result().Cookies() {
-		if cookie.Name == "session" {
-			sid2 = cookie
-		}
-	}
-	require.Equal(t, sid.Value, sid2.Value)
+	sid2 := w.Result().Header.Get(HEADER_XSESSION)
+	require.Equal(t, sid, sid2)
 }

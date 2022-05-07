@@ -5,11 +5,18 @@ import (
 	"strconv"
 
 	cfg "github.com/ms-xy/go-common/configuration"
+	"github.com/ms-xy/go-common/log"
+)
+
+// SESSION is the key which this middleware uses to store it's data in a
+// gin.Context map
+const (
+	SESSION                = "__session__"
+	HEADER_XSESSION        = "X-Session"
+	HEADER_XSESSION_EXPIRY = "X-Session-Expiry"
 )
 
 type SessionConfig struct {
-	// ContextKey defines the key within the session where the middleware stores its data
-	ContextKey string
 	// HandlePanic indicates whether or not the session middleware will handle
 	// its own panics or not. Default is false. Setting it to true will result
 	// in the same behavior as using gin.Use(Logging(), Recovery()) from this
@@ -44,39 +51,36 @@ type SessionConfig struct {
 }
 
 var (
-	Config SessionConfig = SessionConfig{}
+	Configuration SessionConfig = SessionConfig{}
 )
 
-func init() {
-	loader, err := cfg.LoadConfiguration(
-		func() (cfg.ConfigurationLoader, error) { return cfg.LoadEnvConfiguration() },
-		func() (cfg.ConfigurationLoader, error) {
-			loader, _ := cfg.LoadYamlConfiguration("session-manager-settings.yaml")
-			return loader, nil
-		},
-		func() (cfg.ConfigurationLoader, error) {
-			loader, _ := cfg.LoadJsonConfiguration("session-manager-settings.json")
-			return loader, nil
-		},
-	)
-	if err != nil {
-		panic(err)
+func LoadConfig(filepaths ...string) {
+	loader := cfg.NewCombinedLoader()
+	loader.CanLoadEnv()
+	for _, path := range filepaths {
+		log.Infof("loading config file '%s'", path)
+		if err := loader.LoadYaml(path); err != nil {
+			if err := loader.LoadJSON(path); err != nil {
+				log.WithField("filepath", path).Error("invalid file type, need yaml or json")
+			}
+		}
 	}
-	loader.GetTypeSafeOrDefault("session.middleware.handlepanic", &Config.HandlePanic, false)
+	loader.DumpConfig()
 
-	loader.GetTypeSafeOrDefault("session.mysql.dsn", &Config.MySqlDataSource, "test-user:test-password@tcp(localhost)/go_om")
-	loader.GetTypeSafeOrDefault("session.mysql.table", &Config.CookiePath, "sessions")
+	loader.GetTypeSafeOrDefault("gin.middleware.session.handlepanic", &Configuration.HandlePanic, false)
 
-	loader.GetTypeSafeOrDefault("session.cookie.name", &Config.CookieName, "session")
-	loader.GetTypeSafeOrDefault("session.cookie.domain", &Config.CookieDomain, "127.0.0.1")
-	loader.GetTypeSafeOrDefault("session.cookie.path", &Config.CookiePath, "")
-	loader.GetTypeSafeOrDefault("session.cookie.secure", &Config.CookieSecure, false)
-	loader.GetTypeSafeOrDefault("session.cookie.httpOnly", &Config.CookieHttpOnly, true)
-	loader.GetTypeSafeOrDefault("session.cookie.persist", &Config.CookiePersist, true)
+	loader.GetTypeSafeOrDefault("gin.middleware.session.mysql.dsn", &Configuration.MySqlDataSource, "test-user:test-password@tcp(localhost)/go_om")
+	loader.GetTypeSafeOrDefault("gin.middleware.session.mysql.table", &Configuration.CookiePath, "sessions")
 
-	loader.GetTypeSafeOrDefault("session.maxAge", &Config.SessionLifetime, 86400)
-	loader.GetTypeSafeOrDefault("session.idleTime", &Config.SessionIdletime, 1800)
-	loader.GetTypeSafeOrDefault("session.contextKey", &Config.ContextKey, "session")
+	loader.GetTypeSafeOrDefault("gin.middleware.session.cookie.name", &Configuration.CookieName, "session")
+	loader.GetTypeSafeOrDefault("gin.middleware.session.cookie.domain", &Configuration.CookieDomain, "127.0.0.1")
+	loader.GetTypeSafeOrDefault("gin.middleware.session.cookie.path", &Configuration.CookiePath, "")
+	loader.GetTypeSafeOrDefault("gin.middleware.session.cookie.secure", &Configuration.CookieSecure, false)
+	loader.GetTypeSafeOrDefault("gin.middleware.session.cookie.httpOnly", &Configuration.CookieHttpOnly, true)
+	loader.GetTypeSafeOrDefault("gin.middleware.session.cookie.persist", &Configuration.CookiePersist, true)
+
+	loader.GetTypeSafeOrDefault("gin.middleware.session.maxAge", &Configuration.SessionLifetime, 86400)
+	loader.GetTypeSafeOrDefault("gin.middleware.session.idleTime", &Configuration.SessionIdletime, 1800)
 
 	// SessionSecret []byte = mustDecodeHex(env.GetOrDefault("SESSION_COOKIE_SECRET", "688b9fdb0a43bf50c93efe6c06890a0ba9462c4662390b3a078901ff01841b23"))
 	// SessionAesKey []byte = mustDecodeHex(env.GetOrDefault("SESSION_COOKIE_AES_KEY", "a6a07fbdf38d88fc92f794d570fd4b4d8c7b712e734e1adbba4690b981e28d5b"))
